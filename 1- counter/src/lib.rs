@@ -1,5 +1,5 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use borsh_derive::{BorshDeserialize, BorshSerialize};
+use borsh::{BorshDeserialize, BorshSerialize}; // borsh is a serialization library
+// use borsh_derive::{BorshDeserialize, BorshSerialize}; // help: remove unnecessary import
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint,
@@ -34,11 +34,14 @@ pub fn process_instruction(
     let mut counter_account = CounterAccount::try_from_slice(&account.data.borrow())?;
 
     match instruction {
-        CounterInstructions::Increment => {
-            counter_account.counter += 1;
+        CounterInstructions::Increment(args) => {
+            counter_account.counter += args.value;
         }
-        CounterInstructions::Decrement => {
-            counter_account.counter -= 1;
+        CounterInstructions::Decrement(args) => {
+            counter_account.counter -= args.value;
+            if counter_account.counter < 0 {
+                counter_account.counter = 0;
+            }
         }
         CounterInstructions::Reset => {
             counter_account.counter = 0;
@@ -79,34 +82,34 @@ mod test {
 
         let accounts = vec![account];
 
-        let increment_instruction_data: Vec<u8> = vec![0];
-        let decrement_instruction_data: Vec<u8> = vec![1];
-        let mut update_instruction_data: Vec<u8> = vec![2];
+        let mut increment_instruction_data: Vec<u8> = vec![0];
+        let mut decrement_instruction_data: Vec<u8> = vec![1];
+        let mut update_instruction_data: Vec<u8> = vec![2]; // use mut to make it mutable because we will extend it
         let reset_instruction_data: Vec<u8> = vec![3];
 
+        let increment_value = 10u32; // 10 because we want to increment the counter by 10
+        increment_instruction_data.extend_from_slice(&increment_value.to_le_bytes());
         process_instruction(&program_id, &accounts, &increment_instruction_data).unwrap();
-
         assert_eq!(
             CounterAccount::try_from_slice(&accounts[0].data.borrow())
                 .unwrap()
                 .counter,
-            1
+            10
         );
 
+        let decrement_value = 5u32;
+        decrement_instruction_data.extend_from_slice(&decrement_value.to_le_bytes());
         process_instruction(&program_id, &accounts, &decrement_instruction_data).unwrap();
-
         assert_eq!(
             CounterAccount::try_from_slice(&accounts[0].data.borrow())
                 .unwrap()
                 .counter,
-            0
+            5
         );
 
         let update_value = 33u32;
         update_instruction_data.extend_from_slice(&update_value.to_le_bytes());
-
         process_instruction(&program_id, &accounts, &update_instruction_data).unwrap();
-
         assert_eq!(
             CounterAccount::try_from_slice(&accounts[0].data.borrow())
                 .unwrap()
@@ -115,7 +118,6 @@ mod test {
         );
 
         process_instruction(&program_id, &accounts, &reset_instruction_data).unwrap();
-
         assert_eq!(
             CounterAccount::try_from_slice(&accounts[0].data.borrow())
                 .unwrap()
